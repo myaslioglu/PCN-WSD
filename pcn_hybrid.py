@@ -426,8 +426,44 @@ class HybridPCN:
 # 5. EĞİTİM VE DEĞERLENDİRME
 # ============================================================
 
+def compute_centroids(model, data_x, data_y, n_inf=30):
+    """Eğitim sonrası train set'te tek geçişle sabit sense centroid'leri hesapla.
+    Epoch sırasına duyarlı değil, tekrarlanabilir."""
+    centroids = defaultdict(list)
+    for x, s in zip(data_x, data_y):
+        model.reset_state()
+        model.inference(x, n_iterations=n_inf)
+        mu = model.get_global_state()
+        if mu.norm() > 0 and not torch.isnan(mu).any():
+            centroids[s].append(mu)
+    return {s: torch.stack(vecs).mean(dim=0) for s, vecs in centroids.items() if vecs}
+
+
+def evaluate_with_centroids(model, centroids, data_x, data_y, n_inf=30):
+    """Sabit centroid'lerle değerlendirme (epoch sırasından bağımsız)."""
+    correct = 0
+    for x, true_sense in zip(data_x, data_y):
+        model.reset_state()
+        model.inference(x, n_iterations=n_inf)
+        mu = model.get_global_state()
+        
+        if mu.norm() == 0 or torch.isnan(mu).any():
+            continue
+        
+        best_sense, best_sim = None, -1
+        for sn, centroid in centroids.items():
+            sim = F.cosine_similarity(mu.unsqueeze(0), centroid.unsqueeze(0)).item()
+            if sim > best_sim:
+                best_sim, best_sense = sim, sn
+        
+        if best_sense == true_sense:
+            correct += 1
+    
+    return correct / len(data_y) * 100 if len(data_y) > 0 else 0
+
+
 def evaluate(model, sense_embs, data_x, data_y, n_inf=30):
-    """Model değerlendirmesi: cosine similarity ile en yakın sense."""
+    """Eğitim sırası ara değerlendirme: son 6 epoch embedding ortalaması."""
     correct = 0
     for x, true_sense in zip(data_x, data_y):
         model.reset_state()
@@ -553,14 +589,17 @@ def train_and_evaluate():
     elapsed = time.time() - t0
     
     # ============================================================
-    # FİNAL DEĞERLENDİRME
+    # FINAL DEĞERLENDİRME (centroid-tabanlı, epoch sırasından bağımsız)
     # ============================================================
     print(f"\n{'═' * 65}")
-    print(f"📊 FİNAL SONUÇLAR")
+    print(f"📊 FİNAL SONUÇLAR (centroid-tabanlı)")
     print(f"{'═' * 65}")
     
-    final_train = evaluate(model, sense_embs, train_x, train_y, n_inf=30)
-    final_holdout = evaluate(model, sense_embs, test_x, test_y, n_inf=30)
+    # Eğitim sonrası train set'te tek geçişle centroid hesapla
+    centroids = compute_centroids(model, train_x, train_y, n_inf=30)
+    
+    final_train = evaluate_with_centroids(model, centroids, train_x, train_y, n_inf=30)
+    final_holdout = evaluate_with_centroids(model, centroids, test_x, test_y, n_inf=30)
     
     print(f"\n   {'Metrik':<30} {'Değer'}")
     print(f"   {'─' * 50}")
@@ -575,17 +614,16 @@ def train_and_evaluate():
     print(f"   {'kNN (hold-out baseline)':<30} {knn_acc:.1f}%")
     print(f"   {'PCN Train doğruluğu':<30} {final_train:.1f}%")
     print(f"   {'PCN Hold-out doğruluğu':<30} {final_holdout:.1f}%")
-    print(f"   {'En iyi hold-out':<30} {best_holdout:.1f}% (epoch {best_epoch})")
+    print(f"   {'En iyi hold-out (ara)':<30} {best_holdout:.1f}% (epoch {best_epoch})")
     
     # ============================================================
-    # SENSE BAZINDA ANALİZ
+    # SENSE BAZINDA ANALİZ (centroid-tabanlı)
     # ============================================================
     print(f"\n{'─' * 65}")
-    print(f"🔍 HOLD-OUT SENSE BAZINDA")
+    print(f"🔍 HOLD-OUT SENSE BAZINDA (centroid)")
     print(f"{'─' * 65}")
     
     sense_stats = defaultdict(lambda: {"correct": 0, "total": 0})
-    confusion = defaultdict(lambda: defaultdict(int))
     
     for x, true_sense in zip(test_x, test_y):
         model.reset_state()
@@ -597,20 +635,14 @@ def train_and_evaluate():
             continue
         
         best_sense, best_sim = None, -1
-        for sn, emb_list in sense_embs.items():
-            if not emb_list:
-                continue
-            avg = torch.stack(emb_list[-6:]).mean(dim=0)
-            if avg.norm() == 0:
-                continue
-            sim = F.cosine_similarity(mu.unsqueeze(0), avg.unsqueeze(0)).item()
+        for sn, centroid in centroids.items():
+            sim = F.cosine_similarity(mu.unsqueeze(0), centroid.unsqueeze(0)).item()
             if sim > best_sim:
                 best_sim, best_sense = sim, sn
         
         sense_stats[true_sense]["total"] += 1
         if best_sense == true_sense:
             sense_stats[true_sense]["correct"] += 1
-        confusion[true_sense][best_sense] += 1
     
     print(f"\n   {'Sense':<22} {'Test':<6} {'Doğru':<6} {'Başarı':<10}")
     print(f"   {'─' * 48}")
@@ -662,3 +694,10 @@ if __name__ == "__main__":
     print(f"\n📋 JSON ÖZET:")
     import json
     print(json.dumps(results, indent=2, ensure_ascii=False))
+    
+    # results_hybrid.json'a kaydet (tekrarlanabilirlik)
+    import os
+    out_path = os.path.join(os.path.dirname(__file__), 'results_hybrid.json')
+    with open(out_path, 'w') as f:
+        json.dump(results, f, indent=2, ensure_ascii=False)
+    print(f"\n💾 Kaydedildi: {out_path}")

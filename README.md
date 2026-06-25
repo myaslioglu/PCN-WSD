@@ -79,8 +79,24 @@ Each layer has 2 weight matrices updated via local Hebbian rules:
 ## Dependencies
 
 ```
-pip install torch sentence-transformers scikit-learn numpy
+pip install -r requirements.txt
 ```
+
+## Reproducibility
+
+All experiments use fixed seed (`torch.manual_seed(42)`, `np.random.seed(42)`).
+
+**Canonical hyperparameters:**
+| Parameter | Value | Description |
+|-----------|-------|-------------|
+| Learning rate (η) | 0.01 | Hebbian update step |
+| Clamp (ΔW) | ±0.05 | Per-parameter update clip |
+| Weight norm max (ω) | 5.0 | Frobenius norm clip per matrix |
+| Gradient clip (γ) | 10.0 | Inference gradient norm clip |
+| Inference steps | 20 (train) / 30 (test) | Iterative dynamics |
+| dt | 0.1 | Integration timestep |
+
+> Other scripts sweep lr ∈ {0.005, 0.01, 0.02, 0.03} and clamp ∈ {0.05, 0.1} for robustness analysis; these are documented as inline comments.
 
 ## Citation
 
