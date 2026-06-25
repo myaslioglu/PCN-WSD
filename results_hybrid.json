@@ -1,0 +1,13 @@
+{
+  "architecture": "3L: 64→32→16 + W_down",
+  "parameters": 7168,
+  "embedding": "MiniLM 384D → PCA 64D",
+  "train_samples": 83,
+  "test_samples": 21,
+  "epochs": 50,
+  "knn_holdout": 90.47619047619048,
+  "pcn_train": 10.843373493975903,
+  "pcn_holdout": 9.523809523809524,
+  "best_holdout": 23.809523809523807,
+  "best_epoch": 10
+}

@@ -214,3 +214,20 @@ print(f"     PCN, embedding'lerin gürültülü/belirsiz olduğu")
 print(f"     senaryolarda değer üretir. Temiz, güçlü embedding'lerde")
 print(f"     basit kNN yeterlidir. PCN'in asıl gücü 'zayıf sinyalden")
 print(f"     anlam çıkarma' yeteneğidir — tıpkı beyin gibi.")
+
+# ===== JSON EXPORT (tekrarlanabilirlik) =====
+import json, os
+noise_results = [
+    {"noise_sigma": round(n, 1), "knn_acc": round(k, 1), "pcn_acc": round(p, 1), 
+     "diff": round(d, 1), "winner": w}
+    for n, k, p, d, w in results
+]
+out = {
+    "config": {"embedding": "MiniLM 384D", "n_layers": 5, "n_samples": len(SAMPLES),
+               "n_senses": len(SENSES), "seed": 42},
+    "noise_results": noise_results,
+    "crossover_sigma": crossover
+}
+with open(os.path.join(os.path.dirname(__file__), 'results_noise.json'), 'w') as f:
+    json.dump(out, f, indent=2, ensure_ascii=False)
+print(f"\n💾 Kaydedildi: results_noise.json")
