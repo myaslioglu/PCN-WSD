@@ -1,30 +1,30 @@
 # PCN-WSD: Predictive Coding Network for Word Sense Disambiguation
 
-**7,700 parameters · Hebbian learning · No backpropagation · 100% held-out accuracy**
+**Hebbian learning · No backpropagation · Biologically-plausible WSD**
 
-A biologically-plausible hierarchical neural network that achieves perfect generalization on Turkish word sense disambiguation using only local synaptic learning rules — 16,000× smaller than GPT-2 Small.
+A biologically-plausible hierarchical neural network for Turkish word sense disambiguation using only local synaptic learning rules. Demonstrates that predictive coding dynamics can disambiguate word meanings from context without gradient-based optimization.
 
 ## Quick Summary
 
-| | k-NN (64D) | PCN-WSD (16D) |
+| | k-NN | PCN-WSD |
 |---|---|---|
-| **Clean** | 100% | 92% |
+| **Clean (MiniLM 384D)** | 90-100% | 60-85% |
 | **σ=0.7 noise** | 35% | **54% 🧠** |
-| **Hold-out** | 100% | **100%** |
-| **Parameters** | — | **7,680** |
+| **Parameters (v1, 32D)** | — | **~6K** |
 
-**Key finding:** At moderate noise (σ=0.7), PCN overtakes k-NN by 19 points. The hierarchical inference dynamics filter noise by reconstructing signals from learned priors — exactly as predictive coding theory predicts.
+**Key finding:** At moderate noise (σ=0.7), PCN overtakes k-NN by 19 points. The hierarchical inference dynamics filter noise by reconstructing signals from learned priors — exactly as predictive coding theory predicts. PCN shines when embedding quality degrades; with strong embeddings, simple k-NN suffices.
 
 ## Architecture
 
+All layers operate at the same dimensionality (fixed-dim design). Hierarchy emerges from information flow direction (sensory → local → global), not from dimensional compression:
+
 ```
-Input (64D PCA) → Layer 0 (64→32) → Layer 1 (32→16) → Output (16D)
+Input (D) → Layer 0 (D→D) → Layer 1 (D→D) → ... → Layer N (D→D)
 ```
 
-Each layer has 3 weight matrices updated via local Hebbian rules:
+Each layer has 2 weight matrices updated via local Hebbian rules:
 - **W_fwd**: forward projection (input → hidden state)
-- **W_bwd**: backward prediction (hidden state → input reconstruction)  
-- **W_down**: downward prediction to the layer below
+- **W_bwd**: backward prediction (hidden state → input reconstruction)
 
 **Inference**: 20-30 iterative cycles. Weights are frozen, only internal states (`μ`) update: `dμ/dt = W_fwd · ε − μ`
 
@@ -34,32 +34,37 @@ Each layer has 3 weight matrices updated via local Hebbian rules:
 
 | v | Architecture | Embedding | Accuracy | Key Insight |
 |---|---|---|---|---|
-| v1 | 3L: 32→16→8→4 | 32D random | 84.6% | Feasibility proof |
-| v2 | 3-5L same dim | 384D MiniLM | 8.3% | Weight explosion (NaN) |
-| v3 | 5L fixed 64D | 64D PCA | 41.3% | Gradient clipping fixes NaN |
-| **Hybrid** | **3L: 64→32→16** | **64D PCA** | **97.1%** | **Dimensional reduction + clipping** |
+| v1 | 3L fixed 32D | 32D random | 84.6% | Feasibility proof |
+| v2 | 4L fixed 64D | 64D random | ~81% | Precision-weighting, k-fold CV |
+| v3 | 5L fixed 64D | 64D synthetic | 41-60% | Residual connections + gradient clipping fix NaN |
+| v4 | 5L fixed 384D | 384D MiniLM | 60-85% | Real multilingual embeddings + EMA precision |
+| Noise | 5L fixed 384D | 384D MiniLM | — | k-NN vs PCN noise robustness (crossover at σ=0.7) |
+
+> **Note:** A hybrid 64→32→16 dimensional-reduction variant (`pcn_hybrid.py`) with W_down was prototyped but underperformed (~10% hold-out), confirming that fixed-dim hierarchy with iterative inference is more stable for this task scale.
 
 ## Key Results
 
-- **100% hold-out accuracy** on 26 unseen test samples (trained on 104, 13 senses)
+- **5-fold cross-validation** with 4-layer PCN shows consistent generalization
 - **Noise crossover at σ=0.7**: kNN collapses (35%), PCN maintains (54%)
 - **Clean > Noisy training**: PCN learns best from clean templates, filters noise at inference time
 - **Gradient clipping** (γ=10) + weight norm clipping (ω=3) essential for stability
+- **Residual connections** improve deep model stability (3L→5L→7L)
 
 ## Files
 
 | File | Description |
 |---|---|
-| `pcn_wsd.py` | v1 prototype — random embeddings, first success |
-| `pcn_benchmark.py` | v2 extended benchmark |
+| `pcn_wsd.py` | v1 prototype — random embeddings, first success (84.6%) |
+| `pcn_benchmark.py` | v2 extended benchmark with k-fold CV |
 | `pcn_v3_clipped.py` | v3 clipped PCN with residual ablation |
-| `pcn_v3_residual.py` | v3 residual + precision experiments |
+| `pcn_v3_residual.py` | v4: 384D MiniLM + residual + EMA precision |
 | `residual_ablation.py` | Residual connection ablation study |
 | `knn_vs_pcn_noise.py` | k-NN vs PCN noise robustness comparison |
+| `pcn_hybrid.py` | 🧪 Experimental: 64→32→16 dim-reduction + W_down + PCA + hold-out (underperforms) |
 
 ## Why This Matters
 
-1. **Energy efficiency**: 7.7K params vs GPT-3's 175B. The brain runs on 20W.
+1. **Energy efficiency**: ~6K-1.5M params vs GPT-3's 175B. The brain runs on 20W.
 2. **Biologically plausible**: Local Hebbian updates, no weight transport problem.
 3. **Dynamic inference**: Iterative state updates — the model "thinks" about ambiguous input.
 4. **Noise filtering**: Hierarchical predictions reconstruct corrupted signals — like the brain recognizing degraded stimuli.
