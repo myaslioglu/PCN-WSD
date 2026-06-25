@@ -7,7 +7,7 @@ v3 yenilikleri:
   - EMA precision-weighting (patlamasız adaptif güven)
   - sentence-transformers gerçek multilingual embedding (384D)
   - 5 katmanlı derin PCN
-  - 150+ örnekli geniş veri seti
+  - 78 örnekli veri seti (13 anlam × 6 cümle)
   - Katman sayısı sweep (3 vs 5 katman)
   - Inference iterasyon sweep (10 vs 30 adım)
 
@@ -551,7 +551,7 @@ def main():
     print(f"{'═' * 70}")
     print(f"  v1 (rastgele emb, 3L, 26 örnek):     ~84.6%")
     print(f"  v2 (rastgele emb, 3L, 52 örnek):     ~80.8%")
-    print(f"  v3 (MiniLM, 5L+Res, 90 örnek):       ~sonuçlar yukarıda")
+    print(f"  v3 (MiniLM, 5L+Res, 78 örnek):       ~sonuçlar yukarıda")
     print(f"")
     print(f"  v3 yenilikleri:")
     print(f"    ✅ Residual skip connections (gradient koruması)")
